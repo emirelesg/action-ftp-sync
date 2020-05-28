@@ -1,61 +1,46 @@
-require('dotenv').config();
 const chalk = require('chalk');
 const path = require('path');
 const fs = require('fs');
 const FileHashMap = require('./FileHashMap');
 const Ftp = require('./Ftp');
-const core = require('@actions/core');
-
-const ftp = new Ftp(
-  {
-    host: core.getInput('host') || process.env.FTP_HOST,
-    port: core.getInput('port') || process.env.FTP_PORT,
-    user: core.getInput('username') || process.env.FTP_USERNAME,
-    pass: core.getInput('password') || process.env.FTP_PASSWORD
-  },
-  process.env.DRY_RUN || false,
-  core.getInput('ignore') || process.env.FTP_IGNORE
-);
-const localBaseDir = path.normalize(
-  core.getInput('localDir') || process.env.LOCAL_DIR
-);
-const remoteBaseDir = path.normalize(
-  core.getInput('remoteDir') || process.env.REMOTE_DIR
-);
+const { setFailed } = require('@actions/core');
+const { localDir, remoteDir, hashesPath, localFilter } = require('./config');
+const ftp = new Ftp();
 const hash = new FileHashMap();
 
 function lsLocal(dir) {
-  return fs.readdirSync(dir).reduce(
-    (a, file) => {
-      const fullPath = path.join(dir, file);
-      if (ftp.filter(localToRemote(fullPath))) {
-        if (fs.lstatSync(fullPath).isDirectory()) {
-          a.dirs.push(fullPath);
+  return fs
+    .readdirSync(dir)
+    .map(file => path.join(dir, file))
+    .filter(localFilter)
+    .reduce(
+      (a, file) => {
+        if (fs.lstatSync(file).isDirectory()) {
+          a.dirs.push(file);
         } else {
-          a.files.push(fullPath);
+          a.files.push(file);
         }
-      }
-      return a;
-    },
-    { dir, files: [], dirs: [] }
-  );
+        return a;
+      },
+      { dir, files: [], dirs: [] }
+    );
 }
 
 function localToRemote(local) {
-  const samePath = local.replace(localBaseDir + '/', '');
-  return path.join(remoteBaseDir, samePath);
+  const samePath = local.replace(localDir + '/', '');
+  return path.join(remoteDir, samePath);
 }
 
 function remoteToLocal(remote) {
-  const samePath = remote.replace(remoteBaseDir + '/', '');
-  return path.join(localBaseDir, samePath);
+  const samePath = remote.replace(remoteDir + '/', '');
+  return path.join(localDir, samePath);
 }
 
 async function sync(subdir) {
   console.log(chalk`Subdir: {bold ${subdir}}`);
 
-  const localPath = path.join(localBaseDir, subdir);
-  const remotePath = path.join(remoteBaseDir, subdir);
+  const localPath = path.join(localDir, subdir);
+  const remotePath = path.join(remoteDir, subdir);
   const local = lsLocal(localPath);
   const remote = await ftp.ls(remotePath);
 
@@ -113,23 +98,26 @@ async function sync(subdir) {
           }
         })
         // Sync local subdir.
-        .then(() => sync(dir.replace(localBaseDir + '/', ''))),
+        .then(() => sync(dir.replace(localDir + '/', ''))),
     Promise.resolve()
   );
 }
 
 (async () => {
+  // Authenticate with ftp server.
+  await ftp.auth();
+
   // Load hashes from the ftp server.
-  hash.hashes = await ftp.getJSON(path.join(remoteBaseDir, '.hashes'));
+  hash.hashes = await ftp.getJSON(hashesPath);
 
   // Make base dir in ftp server.
-  if (remoteBaseDir !== '.') await ftp.mkdirRecursive(remoteBaseDir);
+  if (remoteDir !== '.') await ftp.mkdirRecursive(remoteDir);
 
   // Sync local and remote dirs.
   await sync('');
 
   // Upload the updated hashes to the server.
-  await ftp.putJSON(hash.hashes, path.join(remoteBaseDir, '.hashes'));
+  await ftp.putJSON(hash.cleanup(), hashesPath);
 })()
-  .catch(err => core.setFailed(err.message))
+  .catch(err => setFailed(err.message))
   .finally(() => ftp.quit());
