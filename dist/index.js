@@ -7175,8 +7175,10 @@ const hashesPath = path.join(remoteDir, '.hashes');
 let localIgnore = [];
 let remoteIgnore = [hashesPath];
 const ftpignorePath = path.join(projectDir, '.ftpignore.json');
+console.log('ftpignore path', ftpignorePath);
 if (fs.existsSync(ftpignorePath)) {
   const obj = JSON.parse(fs.readFileSync(ftpignorePath, 'utf8'));
+  console.log('ftpignore obj', obj);
   if (obj['local']) {
     localIgnore = [
       ...localIgnore,
@@ -7190,6 +7192,8 @@ if (fs.existsSync(ftpignorePath)) {
     ];
   }
 }
+console.log('local', localIgnore);
+console.log('remote', remoteIgnore);
 
 const remoteFilter = p => !remoteIgnore.some(i => minimatch(p, i));
 const localFilter = p =>
