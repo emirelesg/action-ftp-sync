@@ -16,8 +16,12 @@ const ftp = new Ftp(
   process.env.DRY_RUN || false,
   core.getInput('ignore') || process.env.FTP_IGNORE
 );
-const localBaseDir = path.normalize(core.getInput('localDir') || process.env.LOCAL_DIR);
-const remoteBaseDir = path.normalize(core.getInput('remoteDir') || process.env.REMOTE_DIR);
+const localBaseDir = path.normalize(
+  core.getInput('localDir') || process.env.LOCAL_DIR
+);
+const remoteBaseDir = path.normalize(
+  core.getInput('remoteDir') || process.env.REMOTE_DIR
+);
 const hash = new FileHashMap();
 
 function lsLocal(dir) {

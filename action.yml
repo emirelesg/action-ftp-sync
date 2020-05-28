@@ -1,5 +1,5 @@
-name: 'Hello World'
-description: 'Greet someone and record the time'
+name: 'Action FTP Sync'
+description: 'This action syncs a local dir with a remote dir via FTP using hashes for finding differences in files.'
 inputs:
   host:
     description: 'host description'
@@ -22,4 +22,4 @@ inputs:
     required: true
 runs:
   using: 'node12'
-  main: 'src/index.js'
+  main: 'dist/index.js'

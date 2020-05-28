@@ -1,27 +1,33 @@
 {
-  "name": "hello-world-javascript-action",
+  "name": "action-ftp-sync",
   "version": "1.0.0",
-  "description": "This action prints \"Hello World\" or \"Hello\" + the name of a person to greet to the log.",
+  "description": "This action syncs a local dir with a remote dir via FTP using hashes for finding differences in files.",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "build": "ncc build"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/hello-world-javascript-action.git"
+    "url": "git+https://github.com/emirelesg/action-ftp-sync.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/actions/hello-world-javascript-action/issues"
-  },
-  "homepage": "https://github.com/actions/hello-world-javascript-action#readme",
+  "author": "Enrique Mireles",
+  "license": "MIT",
+  "homepage": "https://github.com/emirelesg/action-ftp-sync#readme",
   "dependencies": {
     "@actions/core": "^1.1.0",
     "chalk": "^4.0.0",
     "dotenv": "^8.2.0",
     "jsftp": "^2.1.3",
     "md5": "^2.2.1"
+  },
+  "devDependencies": {
+    "@zeit/ncc": "^0.22.3",
+    "eslint": "^7.1.0",
+    "eslint-config-prettier": "^6.11.0",
+    "eslint-plugin-import": "^2.20.2",
+    "eslint-plugin-prettier": "^3.1.3",
+    "prettier": "^2.0.5"
   }
 }
