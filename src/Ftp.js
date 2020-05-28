@@ -2,6 +2,7 @@ const jsftp = require('jsftp');
 const path = require('path');
 const chalk = require('chalk');
 const fs = require('fs');
+const minimatch = require('minimatch');
 
 class Ftp {
   constructor(credentials, dry, ignoreFile) {
@@ -11,7 +12,7 @@ class Ftp {
     if (this.dry) console.log(chalk`{red *DRY RUN* }`);
   }
   makeIgnoreFilter(ignoreFile) {
-    let ignore = ['.hashes'];
+    let ignore = ['**/.hashes', '**/.well-known'];
     let data = null;
     if (fs.existsSync(ignoreFile)) {
       data = fs.readFileSync(ignoreFile, 'utf-8');
@@ -21,7 +22,7 @@ class Ftp {
     if (data) {
       ignore = [...ignore, ...data.split('\n')].map(p => path.normalize(p));
     }
-    return p => ignore.indexOf(p) === -1;
+    return p => !ignore.some(i => minimatch(p, i));
   }
   raw(command, args) {
     return new Promise((resolve, reject) => {
@@ -148,7 +149,7 @@ class Ftp {
           .then(currentDir => this.ls(currentDir))
           .then(({ dir, dirs }) => {
             const completePath = path.join(dir, subdir);
-            if (dirs.indexOf(subdir) === -1) {
+            if (dirs.indexOf(completePath) === -1) {
               return this.mkdir(completePath);
             }
             return completePath;
