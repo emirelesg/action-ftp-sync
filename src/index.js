@@ -1,23 +1,11 @@
-// require('dotenv').config();
+require('dotenv').config();
 const chalk = require('chalk');
 const path = require('path');
 const fs = require('fs');
-// const argv = require('minimist')(process.argv.slice(2));
 const FileHashMap = require('./FileHashMap');
 const Ftp = require('./Ftp');
 const core = require('@actions/core');
 
-// const ftp = new Ftp(
-//   {
-//     host: process.env.FTP_HOST,
-//     port: process.env.FTP_PORT,
-//     user: process.env.FTP_USERNAME,
-//     pass: process.env.FTP_PASSWORD
-//   },
-//   argv['dry-run'] || false
-// );
-// const localBaseDir = path.normalize(process.env.FTP_LOCAL_DIR);
-// const remoteBaseDir = path.normalize(process.env.FTP_REMOTE_DIR);
 const ftp = new Ftp(
   {
     host: core.getInput('host') || process.env.FTP_HOST,
@@ -25,10 +13,11 @@ const ftp = new Ftp(
     user: core.getInput('username') || process.env.FTP_USERNAME,
     pass: core.getInput('password') || process.env.FTP_PASSWORD
   },
-  process.env.DRY_RUN || false
+  process.env.DRY_RUN || false,
+  core.getInput('ignore') || process.env.FTP_IGNORE
 );
-const localBaseDir = path.normalize(core.getInput('localDir'));
-const remoteBaseDir = path.normalize(core.getInput('remoteDir'));
+const localBaseDir = path.normalize(core.getInput('localDir') || process.env.LOCAL_DIR);
+const remoteBaseDir = path.normalize(core.getInput('remoteDir') || process.env.REMOTE_DIR);
 const hash = new FileHashMap();
 
 function lsLocal(dir) {

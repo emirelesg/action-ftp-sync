@@ -4,16 +4,21 @@ const chalk = require('chalk');
 const fs = require('fs');
 
 class Ftp {
-  constructor(credentials, dry) {
+  constructor(credentials, dry, ignoreFile) {
     this.ftp = new jsftp(credentials);
     this.dry = dry;
-    this.filter = this.makeIgnoreFilter();
+    this.filter = this.makeIgnoreFilter(ignoreFile);
     if (this.dry) console.log(chalk`{red *DRY RUN* }`);
   }
-  makeIgnoreFilter() {
+  makeIgnoreFilter(ignoreFile) {
     let ignore = ['.hashes'];
-    if (fs.existsSync('.ftpignore')) {
-      const data = fs.readFileSync('.ftpignore', 'utf-8');
+    let data = null;
+    if (fs.existsSync(ignoreFile)) {
+      data = fs.readFileSync(ignoreFile, 'utf-8');
+    } else if (fs.existsSync('.ftpignore')) {
+      data = fs.readFileSync('.ftpignore', 'utf-8');
+    }
+    if (data) {
       ignore = [...ignore, ...data.split('\n')].map(p => path.normalize(p));
     }
     return p => ignore.indexOf(p) === -1;
