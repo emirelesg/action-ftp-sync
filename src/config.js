@@ -13,7 +13,7 @@ const ftpCredentials = {
 
 const dryRun = process.env.DRY_RUN === 'true';
 
-const projectDir = path.normalize(process.env.PROJECT_DIR) || '';
+const projectDir = path.normalize(process.env.PROJECT_DIR || '');
 
 const localDir = path.join(
   projectDir,
