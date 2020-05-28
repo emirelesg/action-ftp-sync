@@ -1,0 +1,25 @@
+name: 'Hello World'
+description: 'Greet someone and record the time'
+inputs:
+  host:
+    description: 'host description'
+    required: true
+  port:
+    description: 'port description'
+    required: true
+    default: 21
+  username:
+    description: 'username description'
+    required: true
+  password:
+    description: 'password description'
+    required: true
+  localDir:
+    description: 'localDir description'
+    required: true
+  remoteDir:
+    description: 'remoteDir description'
+    required: true
+runs:
+  using: 'node12'
+  main: 'src/index.js'
