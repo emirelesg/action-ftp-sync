@@ -4284,10 +4284,14 @@ function base64DetectIncompleteChar(buffer) {
 
 const fs = __webpack_require__(747);
 const md5 = __webpack_require__(688);
+const path = __webpack_require__(622);
+const chalk = __webpack_require__(843);
+const { projectDir } = __webpack_require__(659);
 
 class FileHashMap {
   constructor() {
     this.hashes = {};
+    this.checked = [];
     this.md5 = (() => {
       let cache = {};
       return function (file) {
@@ -4297,14 +4301,30 @@ class FileHashMap {
       };
     })();
   }
+  relativeToProject(file) {
+    return path.relative(projectDir, file);
+  }
   isSame(file) {
-    return this.hashes[file] && this.hashes[file] === this.md5(file);
+    let mapped = this.relativeToProject(file);
+    if (this.checked.indexOf(mapped) === -1) this.checked.push(mapped);
+    return this.hashes[mapped] && this.hashes[mapped] === this.md5(file);
   }
   add(file) {
-    this.hashes[file] = this.md5(file);
+    let mapped = this.relativeToProject(file);
+    this.hashes[mapped] = this.md5(file);
   }
   remove(file) {
-    if (this.hashes[file]) delete this.hashes[file];
+    let mapped = this.relativeToProject(file);
+    if (this.hashes[mapped]) delete this.hashes[mapped];
+  }
+  cleanup() {
+    return Object.entries(this.hashes).reduce((obj, [file, hash]) => {
+      if (this.checked.indexOf(file) !== -1) {
+        return { ...obj, [file]: hash };
+      }
+      console.log(chalk`Removing hash for non-existent file: {bold ${file}}`);
+      return obj;
+    }, {});
   }
 }
 
@@ -4530,28 +4550,23 @@ function escape(s) {
 const jsftp = __webpack_require__(860);
 const path = __webpack_require__(622);
 const chalk = __webpack_require__(843);
-const fs = __webpack_require__(747);
-const minimatch = __webpack_require__(93);
+const { dryRun, ftpCredentials, remoteFilter } = __webpack_require__(659);
 
 class Ftp {
-  constructor(credentials, dry, ignoreFile) {
-    this.ftp = new jsftp(credentials);
-    this.dry = dry;
-    this.filter = this.makeIgnoreFilter(ignoreFile);
-    if (this.dry) console.log(chalk`{red *DRY RUN* }`);
+  constructor() {
+    this.ftp = new jsftp(ftpCredentials);
+    if (dryRun) console.log(chalk`{red *DRY RUN* }`);
   }
-  makeIgnoreFilter(ignoreFile) {
-    let ignore = ['**/.hashes'];
-    let data = null;
-    if (fs.existsSync(ignoreFile)) {
-      data = fs.readFileSync(ignoreFile, 'utf-8');
-    } else if (fs.existsSync('.ftpignore')) {
-      data = fs.readFileSync('.ftpignore', 'utf-8');
-    }
-    if (data) {
-      ignore = [...ignore, ...data.split('\n')].map(p => path.normalize(p));
-    }
-    return p => !ignore.some(i => minimatch(p, i));
+  auth() {
+    return new Promise((resolve, reject) => {
+      this.ftp.auth(ftpCredentials.username, ftpCredentials.password, err => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(true);
+        }
+      });
+    });
   }
   raw(command, args) {
     return new Promise((resolve, reject) => {
@@ -4575,18 +4590,18 @@ class Ftp {
             files: res
               .filter(t => t.type === 0)
               .map(t => path.join(dir, t.name))
-              .filter(this.filter),
+              .filter(remoteFilter),
             dirs: res
               .filter(t => t.type === 1)
               .map(t => path.join(dir, t.name))
-              .filter(this.filter)
+              .filter(remoteFilter)
           });
         }
       });
     });
   }
   putBuffer(buf, file) {
-    if (this.dry) return true;
+    if (dryRun) return true;
     return new Promise((resolve, reject) => {
       this.ftp.put(buf, file, err => {
         if (err) {
@@ -4621,7 +4636,7 @@ class Ftp {
   }
   putJSON(obj, file) {
     console.log(chalk`{magenta Uploading ${file}}`);
-    if (this.dry) return true;
+    if (dryRun) return true;
     const data = `${JSON.stringify(obj || {}, null, 2)}\n`;
     const buf = Buffer.from(data);
     return this.putBuffer(buf, file);
@@ -4640,18 +4655,18 @@ class Ftp {
   }
   rm(file) {
     console.log(chalk`{red Removing ${file}}`);
-    if (this.dry) return true;
+    if (dryRun) return true;
     return this.raw('dele', file);
   }
   rmdir(dir) {
     console.log(chalk`{yellow Removing ${dir}}`);
-    if (this.dry) return true;
+    if (dryRun) return true;
     return this.raw('rmd', dir);
   }
   mkdir(dir) {
     console.log(chalk`{green Making ${dir}}`);
-    if (this.dry) return true;
-    return this.raw('mkd', dir);
+    if (dryRun) return true;
+    return this.raw('mkd', dir).then(() => dir);
   }
   async rmdirRecursive(dir) {
     const { files, dirs } = await this.ls(dir);
@@ -7126,6 +7141,74 @@ module.exports = require("net");
 
 /***/ }),
 
+/***/ 659:
+/***/ (function(module, __unusedexports, __webpack_require__) {
+
+__webpack_require__(63).config();
+const { getInput } = __webpack_require__(470);
+const path = __webpack_require__(622);
+const fs = __webpack_require__(747);
+const minimatch = __webpack_require__(93);
+
+const ftpCredentials = {
+  host: getInput('host') || process.env.FTP_HOST,
+  port: getInput('port') || process.env.FTP_PORT,
+  username: getInput('username') || process.env.FTP_USERNAME,
+  password: getInput('password') || process.env.FTP_PASSWORD
+};
+
+const dryRun = process.env.DRY_RUN === 'true';
+
+const projectDir = path.normalize(process.env.PROJECT_DIR) || '';
+
+const localDir = path.join(
+  projectDir,
+  path.normalize(getInput('localDir') || process.env.LOCAL_DIR)
+);
+
+const remoteDir = path.normalize(
+  getInput('remoteDir') || process.env.REMOTE_DIR
+);
+
+const hashesPath = path.join(remoteDir, '.hashes');
+
+let localIgnore = [];
+let remoteIgnore = [hashesPath];
+const ftpignorePath = path.join(projectDir, '.ftpignore.json');
+if (fs.existsSync(ftpignorePath)) {
+  const obj = JSON.parse(fs.readFileSync(ftpignorePath, 'utf8'));
+  if (obj['local']) {
+    localIgnore = [
+      ...localIgnore,
+      ...obj['local'].map(p => path.join(projectDir, p))
+    ];
+  }
+  if (obj['remote']) {
+    remoteIgnore = [
+      ...remoteIgnore,
+      ...obj['remote'].map(p => path.normalize(p))
+    ];
+  }
+}
+
+const remoteFilter = p => !remoteIgnore.some(i => minimatch(p, i));
+const localFilter = p =>
+  !localIgnore.some(i => minimatch(p, i) && !fs.lstatSync(p).isSymbolicLink());
+
+module.exports = {
+  ftpCredentials,
+  localFilter,
+  remoteFilter,
+  projectDir,
+  localDir,
+  remoteDir,
+  hashesPath,
+  dryRun
+};
+
+
+/***/ }),
+
 /***/ 663:
 /***/ (function(module, __unusedexports, __webpack_require__) {
 
@@ -7397,64 +7480,49 @@ ResponseParser.prototype._transform = function(chunk, encoding, done) {
 /***/ 676:
 /***/ (function(__unusedmodule, __unusedexports, __webpack_require__) {
 
-__webpack_require__(63).config();
 const chalk = __webpack_require__(843);
 const path = __webpack_require__(622);
 const fs = __webpack_require__(747);
 const FileHashMap = __webpack_require__(343);
 const Ftp = __webpack_require__(457);
-const core = __webpack_require__(470);
-
-const ftp = new Ftp(
-  {
-    host: core.getInput('host') || process.env.FTP_HOST,
-    port: core.getInput('port') || process.env.FTP_PORT,
-    user: core.getInput('username') || process.env.FTP_USERNAME,
-    pass: core.getInput('password') || process.env.FTP_PASSWORD
-  },
-  process.env.DRY_RUN || false,
-  core.getInput('ignore') || process.env.FTP_IGNORE
-);
-const localBaseDir = path.normalize(
-  core.getInput('localDir') || process.env.LOCAL_DIR
-);
-const remoteBaseDir = path.normalize(
-  core.getInput('remoteDir') || process.env.REMOTE_DIR
-);
+const { setFailed } = __webpack_require__(470);
+const { localDir, remoteDir, hashesPath, localFilter } = __webpack_require__(659);
+const ftp = new Ftp();
 const hash = new FileHashMap();
 
 function lsLocal(dir) {
-  return fs.readdirSync(dir).reduce(
-    (a, file) => {
-      const fullPath = path.join(dir, file);
-      if (ftp.filter(localToRemote(fullPath))) {
-        if (fs.lstatSync(fullPath).isDirectory()) {
-          a.dirs.push(fullPath);
+  return fs
+    .readdirSync(dir)
+    .map(file => path.join(dir, file))
+    .filter(localFilter)
+    .reduce(
+      (a, file) => {
+        if (fs.lstatSync(file).isDirectory()) {
+          a.dirs.push(file);
         } else {
-          a.files.push(fullPath);
+          a.files.push(file);
         }
-      }
-      return a;
-    },
-    { dir, files: [], dirs: [] }
-  );
+        return a;
+      },
+      { dir, files: [], dirs: [] }
+    );
 }
 
 function localToRemote(local) {
-  const samePath = local.replace(localBaseDir + '/', '');
-  return path.join(remoteBaseDir, samePath);
+  const samePath = local.replace(localDir + '/', '');
+  return path.join(remoteDir, samePath);
 }
 
 function remoteToLocal(remote) {
-  const samePath = remote.replace(remoteBaseDir + '/', '');
-  return path.join(localBaseDir, samePath);
+  const samePath = remote.replace(remoteDir + '/', '');
+  return path.join(localDir, samePath);
 }
 
 async function sync(subdir) {
   console.log(chalk`Subdir: {bold ${subdir}}`);
 
-  const localPath = path.join(localBaseDir, subdir);
-  const remotePath = path.join(remoteBaseDir, subdir);
+  const localPath = path.join(localDir, subdir);
+  const remotePath = path.join(remoteDir, subdir);
   const local = lsLocal(localPath);
   const remote = await ftp.ls(remotePath);
 
@@ -7512,25 +7580,28 @@ async function sync(subdir) {
           }
         })
         // Sync local subdir.
-        .then(() => sync(dir.replace(localBaseDir + '/', ''))),
+        .then(() => sync(dir.replace(localDir + '/', ''))),
     Promise.resolve()
   );
 }
 
 (async () => {
+  // Authenticate with ftp server.
+  await ftp.auth();
+
   // Load hashes from the ftp server.
-  hash.hashes = await ftp.getJSON(path.join(remoteBaseDir, '.hashes'));
+  hash.hashes = await ftp.getJSON(hashesPath);
 
   // Make base dir in ftp server.
-  if (remoteBaseDir !== '.') await ftp.mkdirRecursive(remoteBaseDir);
+  if (remoteDir !== '.') await ftp.mkdirRecursive(remoteDir);
 
   // Sync local and remote dirs.
   await sync('');
 
   // Upload the updated hashes to the server.
-  await ftp.putJSON(hash.hashes, path.join(remoteBaseDir, '.hashes'));
+  await ftp.putJSON(hash.cleanup(), hashesPath);
 })()
-  .catch(err => core.setFailed(err.message))
+  .catch(err => setFailed(err.message))
   .finally(() => ftp.quit());
 
 
