@@ -12,7 +12,7 @@ class Ftp {
     if (this.dry) console.log(chalk`{red *DRY RUN* }`);
   }
   makeIgnoreFilter(ignoreFile) {
-    let ignore = ['**/.hashes', '**/.well-known'];
+    let ignore = ['**/.hashes'];
     let data = null;
     if (fs.existsSync(ignoreFile)) {
       data = fs.readFileSync(ignoreFile, 'utf-8');
