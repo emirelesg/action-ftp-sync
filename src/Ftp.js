@@ -122,7 +122,7 @@ class Ftp {
   mkdir(dir) {
     console.log(chalk`{green Making ${dir}}`);
     if (this.dry) return true;
-    return this.raw('mkd', dir);
+    return this.raw('mkd', dir).then(() => dir);
   }
   async rmdirRecursive(dir) {
     const { files, dirs } = await this.ls(dir);
