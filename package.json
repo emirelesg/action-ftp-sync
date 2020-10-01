@@ -16,7 +16,7 @@
   "license": "MIT",
   "homepage": "https://github.com/emirelesg/action-ftp-sync#readme",
   "dependencies": {
-    "@actions/core": "^1.1.0",
+    "@actions/core": "^1.2.6",
     "chalk": "^4.0.0",
     "dotenv": "^8.2.0",
     "jsftp": "^2.1.3",
